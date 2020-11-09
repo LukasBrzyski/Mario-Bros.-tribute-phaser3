@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project 1</title>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.24.1/dist/phaser.min.js"></script>
+</head>
+
+<body>
+    <script>
+        var config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        var player;
+        var platforms;
+        var pipes;
+        var coins;
+        var cursors;
+        var direction = 'r';
+
+        var game = new Phaser.Game(config);
+
+        function preload() {
+            this.load.image('platform', 'assets/platform.png');
+            this.load.image('ground', 'assets/ground.png');
+            this.load.image('pipe1', 'assets/pipe1.png');
+            this.load.image('pipe3', 'assets/pipe3.png');
+            this.load.spritesheet('coin', 'assets/coin.png', { frameWidth: 24, frameHeight: 32 });
+            this.load.spritesheet('character', 'assets/character.png', { frameWidth: 16, frameHeight: 24 });
+        }
+
+        function create() {
+            platforms = this.physics.add.staticGroup(); //dodanie elementów statycznych - grupy platform
+
+            platforms.create(400, 570, 'ground').setScale(2.7, 1).refreshBody(); //dzięki setScale(2) rozciągamy podłoże na całą szerokość
+            platforms.create(50, 170, 'platform');
+            platforms.create(750, 170, 'platform');
+            platforms.create(400, 300, 'platform');
+            platforms.create(-75, 330, 'platform');
+            platforms.create(875, 330, 'platform');
+            platforms.create(50, 450, 'platform');
+            platforms.create(750, 450, 'platform');
+
+            pipes = this.physics.add.staticGroup();
+            pipes.create(50, 100, 'pipe1').setScale(2);
+            pipes.create(750, 100, 'pipe1').setScale(2).setFlipX(true);
+            pipes.create(34, 500, 'pipe3').setScale(2);
+            pipes.create(766, 500, 'pipe3').setScale(2).setFlipX(true);
+
+            player = this.physics.add.sprite(150, 506, 'character').setScale(2);
+            player.setBounce(0.2);
+            player.setCollideWorldBounds(true);
+
+            this.anims.create({
+                key: 'left', //klatki postaci odwróconej w lewo
+                frames: this.anims.generateFrameNumbers('character', { start: 0, end: 2 }),
+                frameRate: 10,
+                repeat: -1 // -1 znaczy, że ma być wyświetlana w nieskończonej pętli.
+            });
+
+            this.anims.create({
+                key: 'lookLeft', //klatka z postacią patrzącą w lewo
+                frames: [{ key: 'character', frame: 3 }],
+                frameRate: 20
+            });
+
+            this.anims.create({
+                key: 'jumpLeft', //klatka z postacią skaczącą w lewo
+                frames: [{ key: 'character', frame: 4 }],
+                frameRate: 20,
+                repeat: -1
+            });
+
+            this.anims.create({
+                key: 'jumpRight', //klatka z postacią skaczącą w prawo
+                frames: [{ key: 'character', frame: 5 }],
+                frameRate: 20,
+                repeat: -1
+            });
+
+            this.anims.create({
+                key: 'lookRight', //klatka z postacią patrzącą w prawo
+                frames: [{ key: 'character', frame: 6 }],
+                frameRate: 20
+            });
+
+            this.anims.create({
+                key: 'right', //klatki postaci odwróconej w prawo
+                frames: this.anims.generateFrameNumbers('character', { start: 7, end: 9 }),
+                frameRate: 10,
+                repeat: -1
+            });
+
+            cursors = this.input.keyboard.createCursorKeys();
+
+            coins = this.physics.add.group();
+
+            var coinData = [
+                { x: 150, y: 50 },
+                { x: 650, y: 50 },
+                { x: 75, y: 220 },
+                { x: 150, y: 220 },
+                { x: 650, y: 220 },
+                { x: 725, y: 220 },
+                { x: 250, y: 350 },
+                { x: 550, y: 350 },
+                { x: 100, y: 500 },
+                { x: 700, y: 500 }
+            ];
+
+            for (var i = 0; i < coinData.length; i++) {
+                var coin = coins.create(coinData[i].x, coinData[i].y, 'coin');
+            }
+
+            this.anims.create({
+                key: 'shine', 
+                frames: this.anims.generateFrameNumbers('coin', { start: 0, end: 2 }),
+                frameRate: 4,
+                repeat: -1 // -1 znaczy, że ma być wyświetlana w nieskończonej pętli.
+            });
+
+            // coins.children.iterate(coin => {
+            //     coin.play('left')
+            // });
+            // to samo, w skróconej wersji:
+            coins.playAnimation('shine');
+
+            player.body.setGravityY(300); //współczynnik grawitacji
+            this.physics.add.collider(player, platforms); //kolizje obiektów z platformami
+
+            this.physics.add.overlap(player, coins, collectCoin, null, this);
+        }
+
+        function update() {
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.anims.play('left', true);
+                direction = 'l';
+            }
+            else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.anims.play('right', true);
+                direction = 'r';
+            }
+            else if (direction == 'r'){
+                player.setVelocityX(0);
+                player.anims.play('lookRight');
+            }
+            else {
+                player.setVelocityX(0);
+                player.anims.play('lookLeft');
+            }
+
+            if (cursors.up.isDown && player.body.touching.down) {
+                //strzałka do góry gdy gracz dotyka podłoża
+                player.setVelocityY(-320);
+            }
+            else if (cursors.up.isDown && direction == 'r') {
+                player.anims.play('jumpRight');
+            }
+            else if (cursors.up.isDown && direction == 'l') {
+                player.anims.play('jumpLeft');
+            }
+        }
+
+        function collectCoin(player, coin) {
+            coin.disableBody(true, true);
+        }
+    </script>
+</body>
+
+</html>
